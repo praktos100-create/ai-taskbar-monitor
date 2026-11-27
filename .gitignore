@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# Personal runtime settings & state
+config.json
+reset_bell_state.json
+
+# Virtual environments & build artifacts
+.venv/
+venv/
+build/
+dist/
+*.spec
+*.log
