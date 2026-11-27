@@ -356,7 +356,9 @@ class TestAIUsageMonitor(unittest.TestCase):
             self.assertAlmostEqual(snap.codex.primary_remaining_percent(3_000_000, 30_000_000), 14.0, places=2)
 
             # Case B: expired resets_at <= now resets used_percent to 0.0 (100% remaining)
-            (codex_sess / "weekly_only.jsonl").write_text(
+            weekly_log = codex_sess / "weekly_only.jsonl"
+            previous_mtime = weekly_log.stat().st_mtime
+            weekly_log.write_text(
                 json.dumps({
                     "timestamp": _iso(now - 10),
                     "type": "event_msg",
@@ -374,6 +376,8 @@ class TestAIUsageMonitor(unittest.TestCase):
                 }),
                 encoding="utf-8",
             )
+            # A same-size rewrite can share a timestamp on fast Windows runners.
+            os.utime(weekly_log, (now, previous_mtime + 2))
             snap2 = mon.scan(
                 claude_dir=str(root / ".claude"),
                 codex_dir=str(root / ".codex"),
@@ -866,6 +870,7 @@ class TestSystemMonitor(unittest.TestCase):
 class TestHeadlessUI(unittest.TestCase):
     def test_widgets_instantiate_and_update(self) -> None:
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        from PySide6.QtCore import QCoreApplication, QEvent, Qt
         from PySide6.QtWidgets import QApplication, QSizePolicy
         from ui.settings_dialog import SettingsDialog
         from ui.taskbar_bar import TaskbarOverlayWidget
@@ -946,6 +951,7 @@ class TestHeadlessUI(unittest.TestCase):
                 ai_interval_sec=25,
             )
             dlg = SettingsDialog(cfg_hidden)
+            dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
             built = dlg.build_config()
             self.assertEqual(built.layout_mode, "one_row")
             self.assertEqual(built.claude_window, "5h")
@@ -998,8 +1004,11 @@ class TestHeadlessUI(unittest.TestCase):
             sub_titles = [a.text() for a in win_actions[0].menu().actions() if not a.isSeparator()]
             self.assertEqual(sub_titles, ["Claude", "ChatGPT (Codex)", "Gemini", "모두 5시간 (5h)", "모두 주간 (7일)"])
         finally:
-            widget.shutdown()
+            widget.popup.close()
+            widget.popup.deleteLater()
             widget.close()
+            widget.deleteLater()
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         self.assertIsNotNone(app)
 
 
